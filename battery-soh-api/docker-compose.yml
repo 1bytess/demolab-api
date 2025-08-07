@@ -7,9 +7,17 @@ services:
       - ./models:/app/models
       - ./logs:/app/logs
     environment:
+      - CUDA_VISIBLE_DEVICES=0
       - TF_CPP_MIN_LOG_LEVEL=2
       - PYTHONPATH=/app
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5003/v3/health"]
       interval: 30s
