@@ -5,11 +5,9 @@ services:
       - "5003:5003"
     volumes:
       - ./models:/app/models
-      - ./logs:/app/logs
     environment:
-      - CUDA_VISIBLE_DEVICES=0
-      - TF_CPP_MIN_LOG_LEVEL=2
-      - PYTHONPATH=/app
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     restart: unless-stopped
     deploy:
       resources:
@@ -18,9 +16,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5003/v3/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s

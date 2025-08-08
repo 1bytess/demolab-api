@@ -1,59 +1,46 @@
-# Use NVIDIA CUDA base image
+# Use NVIDIA CUDA base image compatible with TensorFlow 2.15
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
-# Set environment variables
+# Set environment variables to prevent interactive prompts
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CUDA_VISIBLE_DEVICES=0
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-dev \
+# Install system dependencies and Python 3.11
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
     python3-pip \
-    python3-venv \
-    build-essential \
-    curl \
-    wget \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    && \
+    # Link python3.11 to python and python3
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    # Clean up apt cache
+    rm -rf /var/lib/apt/lists/*
 
-# Create symbolic links for python
-RUN ln -sf /usr/bin/python3 /usr/bin/python
-
-# Upgrade pip
-RUN python3 -m pip install --upgrade pip
-
-# Set work directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy the requirements file into the container
 COPY requirements.txt .
 
-# Install Python dependencies in stages to avoid conflicts
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir tensorflow==2.14.0 numpy==1.24.3 pandas==2.0.3 scikit-learn==1.3.0 && \
-    pip install --no-cache-dir fastapi==0.100.1 uvicorn[standard]==0.23.2 pydantic==2.4.2 python-multipart==0.0.6 && \
-    pip install --no-cache-dir keras-tcn==3.5.0 python-json-logger==2.0.7 requests==2.31.0 && \
-    pip install --no-cache-dir psutil==5.9.6 GPUtil==1.4.0
+# Install Python dependencies
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy the rest of the application code
+COPY main.py .
+COPY models/ ./models/
 
-# Create models directory
-RUN mkdir -p models
-
-# Create a non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
-
-# Expose port
+# Expose the port the app runs on
 EXPOSE 5003
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5003/v3/health || exit 1
-
-# Run the application
-CMD ["python", "main.py"]
+# Command to run the application using Uvicorn
+# This is the production-ready way to start the FastAPI server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5003"]
