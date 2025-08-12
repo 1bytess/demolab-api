@@ -1,46 +1,36 @@
-# Use NVIDIA CUDA base image compatible with TensorFlow 2.15
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+# Use Python slim image for smaller size
+FROM python:3.11-slim
 
-# Set environment variables to prevent interactive prompts
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies and Python 3.11
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    software-properties-common \
-    && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-dev \
-    python3.11-distutils \
-    python3-pip \
-    && \
-    # Link python3.11 to python and python3
-    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3.11 /usr/bin/python && \
-    # Clean up apt cache
-    rm -rf /var/lib/apt/lists/*
-
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install system dependencies needed for TensorFlow and scipy
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better Docker layer caching
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY main.py .
+# Copy application code
+COPY app.py .
 COPY models/ ./models/
+COPY sample_cycle.csv .
 
-# Expose the port the app runs on
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
+USER app
+
+# Expose port
 EXPOSE 5003
 
-# Command to run the application using Uvicorn
-# This is the production-ready way to start the FastAPI server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5003"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5003/v3/health')" || exit 1
+
+# Run the application
+CMD ["python", "app.py"]

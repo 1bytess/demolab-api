@@ -1,18 +1,28 @@
+version: '3.8'
+
 services:
-  battery-api:
-    build: .
+  battery-soh-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: battery-soh-api
     ports:
       - "5003:5003"
-    volumes:
-      - ./models:/app/models
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Optional: Mount models directory for easier model updates
+      - ./models:/app/models:ro
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5003/v3/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - battery-soh-network
+
+networks:
+  battery-soh-network:
+    driver: bridge
